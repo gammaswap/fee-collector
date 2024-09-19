@@ -6,12 +6,11 @@ import "@gammaswap/v1-periphery/contracts/PositionManager.sol";
 import "@gammaswap/v1-zapper/contracts/interfaces/ILPZapper.sol";
 import "@gammaswap/v1-core/contracts/libraries/AddressCalculator.sol";
 import "@gammaswap/v1-core/contracts/libraries/GammaSwapLibrary.sol";
-import "@gammaswap/v1-periphery/contracts/base/Transfers.sol";
 
 /// @title FeeCollector Smart Contract
 /// @author Daniel D. Alcarraz (https://github.com/0xDanr)
 /// @dev Converts GammaSwap Protocol Fees into protocol revenue
-contract FeeCollector is IFeeCollector, Transfers {
+contract FeeCollector is IFeeCollector {
 
     error NotContract();
 
@@ -124,15 +123,34 @@ contract FeeCollector is IFeeCollector, Transfers {
 
         GammaSwapLibrary.safeApprove(lpToken, address(lpZapper), withdrawAmt);
 
-        if(isZapOutETH) {
+        if(isZapOutETH) { //TODO Should move logic from LPZapper to check for WETH path to avoid doing this, so we avoid unwrapping/wrapping
+            // Then we can add transfers if we want, but we'll have to permission them
+            // Must make this contract twoStepOwnable
             params.to = address(this);
             ILPZapper(lpZapper).zapOutETH(params, lpSwap0, lpSwap1);
-            send(WETH, address(this), feeReceiver, address(this).balance);
+            uint256 ethBalance = address(this).balance;
+            IWETH(WETH).deposit{value: amount}(); // wrap only what is needed
+            GammaSwapLibrary.safeTransfer(WETH, feeReceiver, ethBalance);
         } else {
             ILPZapper(lpZapper).zapOutToken(params, lpSwap0, lpSwap1);
         }
     }
 
+/* Below should be permissioned functions
+    /// dev See {ITransfers-refundETH}
+    function refundETH() external payable override {
+        if (address(this).balance > 0) GammaSwapLibrary.safeTransferETH(msg.sender, address(this).balance);
+    }
+
+    /// dev See {ITransfers-clearToken}
+    function clearToken(address token, address to, uint256 minAmt) public virtual override {
+        uint256 tokenBal = IERC20(token).balanceOf(address(this));
+        if(tokenBal < minAmt) {
+            revert NotEnoughTokens();
+        }
+
+        if (tokenBal > 0) GammaSwapLibrary.safeTransfer(token, to, tokenBal);
+    }/**/
     //TODO: Check gammaPool exists
     // check tokens, do we need a path0 or path1?
     // if we need, check if path0 and/or path1 is provided
