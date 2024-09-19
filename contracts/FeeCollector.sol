@@ -26,15 +26,35 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
 
     error NotContract();
 
+    /// @dev LP Zapper contract address
     address public immutable lpZapper;
-    address public immutable factory;
-    address public feeReceiver;
 
-    constructor(address _feeReceiver, address _lpZapper, address _factory, address _WETH) Transfers(WETH) {
+    /// @dev GammaPoolFactory contract address
+    address public immutable factory;
+
+    /// @inheritdoc IFeeCollector
+    address public override feeReceiver;
+
+    /// @inheritdoc IFeeCollector
+    address public override executor;
+
+    constructor(address _feeReceiver, address _executor, address _lpZapper, address _factory, address _WETH) Transfers(WETH) {
         feeReceiver = _feeReceiver;
+        executor = _executor;
         lpZapper = _lpZapper;
         factory = _factory;
         WETH = _WETH;
+    }
+
+    /// @dev Throws if called by any account other than the executor.
+    modifier onlyExecutor() {
+        _checkExecutor();
+        _;
+    }
+
+    /// @dev Throws if the sender is not the executor.
+    function _checkExecutor() internal view virtual {
+        require(executor == _msgSender(), "caller is not the executor");
     }
 
     /// @dev Initialize LPZapper when used as a proxy contract
@@ -43,12 +63,19 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         _transferOwnership(msg.sender);
     }
 
-    function setFeeReceiver(address _feeReceiver) external virtual onlyOwner {
+    /// @inheritdoc IFeeCollector
+    function setFeeReceiver(address _feeReceiver) external virtual override onlyOwner {
         require(_feeReceiver != address(0), "ZERO_ADDRESS");
         feeReceiver = _feeReceiver;
     }
 
-    /// @dev See {ITransfers-getGammaPoolAddress}.
+    /// @inheritdoc IFeeCollector
+    function setExecutor(address _executor) external virtual override onlyOwner {
+        require(_executor != address(0), "ZERO_ADDRESS");
+        executor = _executor;
+    }
+
+    /// @inheritdoc Transfers
     function getGammaPoolAddress(address cfmm, uint16 protocolId) internal virtual override view returns(address) {
         return AddressCalculator.calcAddress(factory, protocolId, AddressCalculator.getGammaPoolKey(cfmm, protocolId));
     }
@@ -64,25 +91,29 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         tokenOut = _path.toAddress(0);
     }
 
+    /// @dev check path with UniV3 ends in WETH
     function checkUniV3Path(bytes memory path) internal virtual {
         require(path.length > 0 && _getTokenOut(path) == WETH, "INVALID_UNIV3_PATH");
     }
 
+    /// @dev check path with underlying CFMM ends in WETH
     function checkPath(address[] memory path) internal virtual {
         require(path.length > 1 && path[path.length - 1] == WETH, "INVALID_PATH");
     }
 
+    /// @inheritdoc IFeeCollector
     function collectDSProtocolFees(address cfmm, uint16 protocolId, uint256 lpAmount, uint256[] memory amountsMin, uint256[] memory swapMin,
-        address[] memory path0, address[] memory path1, bytes memory uniV3path0, bytes memory uniV3path1) external virtual onlyOwner {
+        address[] memory path0, address[] memory path1, bytes memory uniV3path0, bytes memory uniV3path1) external virtual override onlyExecutor {
         collectProtocolFees(cfmm, protocolId, lpAmount, amountsMin, swapMin, path0, path1, uniV3path0, uniV3path1, true);
     }
 
+    /// @inheritdoc IFeeCollector
     function collectGSProtocolFees(address cfmm, uint16 protocolId, uint256 lpAmount, uint256[] memory amountsMin, uint256[] memory swapMin,
-        address[] memory path0, address[] memory path1, bytes memory uniV3path0, bytes memory uniV3path1) external virtual onlyOwner {
+        address[] memory path0, address[] memory path1, bytes memory uniV3path0, bytes memory uniV3path1) external virtual override onlyExecutor {
         collectProtocolFees(cfmm, protocolId, lpAmount, amountsMin, swapMin, path0, path1, uniV3path0, uniV3path1, false);
     }
 
-    // withdraw liquidity, and convert to protocol revenue
+    /// @dev withdraw liquidity, and convert to protocol revenue
     function collectProtocolFees(address cfmm, uint16 protocolId, uint256 lpAmount, uint256[] memory amountsMin, uint256[] memory swapMin, address[] memory path0, address[] memory path1,
         bytes memory uniV3path0, bytes memory uniV3path1, bool isCFMMWithdrawal) internal virtual {
         require(cfmm != address(0), "ZERO_ADDRESS");
@@ -181,7 +212,7 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         }
     }
 
-    /// @dev See {ITransfers-clearToken}
+    /// @inheritdoc Transfers
     function clearToken(address token, address to, uint256 minAmt) public virtual override onlyOwner {
         super.clearToken(token, to, minAmt);
     }
