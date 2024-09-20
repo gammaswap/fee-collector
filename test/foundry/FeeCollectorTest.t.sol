@@ -1,0 +1,255 @@
+// SPDX-License-Identifier: GPL-v3
+pragma solidity ^0.8.0;
+
+import "forge-std/Test.sol";
+import "forge-std/console.sol";
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@gammaswap/v1-core/contracts/libraries/GSMath.sol";
+import "@gammaswap/v1-zapper/contracts/LPZapper.sol";
+import "./fixtures/CPMMGammaSwapSetup.sol";
+import "../../contracts/FeeCollector.sol";
+
+contract FeeCollectorTest is CPMMGammaSwapSetup {
+
+    struct TestParams {
+        address lpToken;
+        address token0;
+        address token1;
+        uint256 balWETH;
+        uint256 balUSDC;
+        uint256 balWETH6;
+        uint256 balUSDC6;
+        uint256 balETH;
+    }
+
+    IFeeCollector feeCollector;
+    ILPZapper lpZapper;
+    address user;
+    address executor;
+    address feeReceiver;/**/
+
+    function setUp() public {
+        super.initCPMMGammaSwap(true);
+        user = vm.addr(3);
+        executor = vm.addr(4);
+        feeReceiver = vm.addr(5);
+
+        GammaSwapLibrary.safeTransferETH(address(weth9), 1000_000*1e18);
+
+        //constructor(address _feeReceiver, address _executor, address _lpZapper, address _factory, address _WETH)
+        lpZapper = new LPZapper(address(weth9), address(factory), address(cfmmFactory), address(posMgr), address(mathLib), address(uniRouter), address(0), address(uniRouter), address(0));
+        feeCollector = new FeeCollector(feeReceiver, executor, address(lpZapper), address(factory), address(weth9));
+        deal(address(weth9), user, 1000*1e18);
+        deal(address(weth), user, 1000_000*1e18);
+        deal(address(usdc), user, 1000_000*1e18);
+
+        depositLiquidityInCFMM(addr2, 100e18, 100e18);
+        depositLiquidityInPool(addr2);
+
+        // 18x18 = usdc/weth9
+        depositLiquidityInCFMMByToken(address(usdc), address(weth9), 100*1e18, 100*1e18, addr1);
+        depositLiquidityInCFMMByToken(address(usdc), address(weth9), 100*1e18, 100*1e18, addr2);
+        depositLiquidityInPoolFromCFMM(poolW9, cfmmW9, addr2);
+
+        // 18x6 = usdc/weth6
+        depositLiquidityInCFMMByToken(address(usdc), address(weth6), 100*1e18, 100*1e6, addr1);
+        depositLiquidityInCFMMByToken(address(usdc), address(weth6), 100*1e18, 100*1e6, addr2);
+        depositLiquidityInPoolFromCFMM(pool18x6, cfmm18x6, addr2);
+
+        // 6x6 = weth6/usdc6
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth6), 100*1e6, 100*1e6, addr1);
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth6), 100*1e6, 100*1e6, addr2);
+        depositLiquidityInPoolFromCFMM(pool6x6, cfmm6x6, addr2);
+
+        // 6x18 = usdc6/weth
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth), 100*1e6, 100*1e18, addr1);
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth), 100*1e6, 100*1e18, addr2);
+        depositLiquidityInPoolFromCFMM(pool6x18, cfmm6x18, addr2);/**/
+    }
+
+    function testFeeCollectorOwner() public {
+        address payable addr = payable(address(feeCollector));
+        assertEq(FeeCollector(addr).owner(), address(this));
+
+        vm.expectRevert("INITIALIZED");
+        FeeCollector(addr).initialize();/**/
+    }
+
+    function testCollectGSFees(uint8 swapPath, uint8 percent, bool isCFMMWithdrawal) public {
+        /*percent = percent < 10 ? 10 : percent;
+        percent = percent > 100 ? 100 : percent;
+
+        uint256[] memory amountsMin = new uint256[](2);
+        IPositionManager.DepositReservesParams memory depositParams = IPositionManager.DepositReservesParams({
+            protocolId: 1,
+            cfmm: address(cfmm),
+            to: user,
+            deadline: block.timestamp,
+            amountsDesired: new uint256[](2),
+            amountsMin: amountsMin
+        });
+        depositParams.amountsDesired[0] = 1e18;
+        depositParams.amountsDesired[1] = 1e18;
+
+        TestParams memory _params = TestParams({
+            lpToken: address(pool),
+            token0: ICPMM(cfmm).token0(),
+            token1: ICPMM(cfmm).token1(),
+            balWETH: 0,
+            balUSDC: 0,
+            balWETH6: 0,
+            balUSDC6: 0,
+            balETH: 0
+        });
+
+        if(isCFMMWithdrawal) {
+            _params.lpToken = address(cfmm);
+            IERC20(_params.token0).approve(address(uniRouter), 1e18);
+            IERC20(_params.token1).approve(address(uniRouter), 1e18);
+
+            uniRouter.addLiquidity(_params.token0, _params.token1, 1e18, 1e18, 0, 0, user, type(uint256).max);
+        } else {
+            IERC20(_params.token0).approve(address(posMgr), 1e18);
+            IERC20(_params.token1).approve(address(posMgr), 1e18);
+
+            posMgr.depositReserves(depositParams);
+        }
+
+        uint256 gslpBalance = IERC20(_params.lpToken).balanceOf(user);
+
+        uint256 withdrawAmt = gslpBalance * percent / 100;
+
+        IPositionManager.WithdrawReservesParams memory params = IPositionManager.WithdrawReservesParams({
+            protocolId: 1,
+            cfmm: address(0),
+            amount: withdrawAmt,
+            to: address(0),
+            deadline: block.timestamp,
+            amountsMin: new uint256[](2)
+        });
+
+        ILPZapper.LPSwapParams memory lpSwap0 = ILPZapper.LPSwapParams({
+            amount: 0,
+            protocolId: 0,
+            path: new address[](0),
+            uniV3Path: new bytes(0)
+        });
+
+        ILPZapper.LPSwapParams memory lpSwap1 = ILPZapper.LPSwapParams({
+            amount: 0,
+            protocolId: 0,
+            path: new address[](0),
+            uniV3Path: new bytes(0)
+        });
+
+        if(swapPath == 1) { // usdc
+            lpSwap0.protocolId = 1;
+            lpSwap0.path = new address[](2);
+            lpSwap0.path[0] = _params.token0;
+            lpSwap0.path[1] = _params.token1;
+        } else if(swapPath == 2) { // weth
+            lpSwap1.protocolId = 1;
+            lpSwap1.path = new address[](2);
+            lpSwap1.path[0] = _params.token1;
+            lpSwap1.path[1] = _params.token0;
+        } else if(swapPath == 3) { // usdc6
+            lpSwap0.protocolId = 1;
+            lpSwap0.path = new address[](2);
+            lpSwap0.path[0] = _params.token0; // weth
+            lpSwap0.path[1] = address(usdc6); // usdc6
+        } else if(swapPath == 4) { // weth6
+            lpSwap0.protocolId = 1;
+            lpSwap0.path = new address[](3);
+            lpSwap0.path[0] = _params.token0; // weth
+            lpSwap0.path[1] = address(usdc6); // usdc6
+            lpSwap0.path[2] = address(weth6); // weth6
+        } else if(swapPath == 5) { // weth6
+            lpSwap1.protocolId = 1;
+            lpSwap1.path = new address[](2);
+            lpSwap1.path[0] = _params.token1; // usdc
+            lpSwap1.path[1] = address(weth6); // weth6
+        } else if(swapPath == 6) { // usdc6
+            lpSwap1.protocolId = 1;
+            lpSwap1.path = new address[](3);
+            lpSwap1.path[0] = _params.token1; // usdc
+            lpSwap1.path[1] = _params.token0; // weth
+            lpSwap1.path[2] = address(usdc6); // usdc6
+        } else if(swapPath == 7) { // swap both to weth6
+            lpSwap0.protocolId = 1;
+            lpSwap0.path = new address[](3);
+            lpSwap0.path[0] = _params.token0; // weth
+            lpSwap0.path[1] = address(usdc6); // usdc6
+            lpSwap0.path[2] = address(weth6); // weth6
+            lpSwap1.protocolId = 1;
+            lpSwap1.path = new address[](2);
+            lpSwap1.path[0] = _params.token1; // usdc
+            lpSwap1.path[1] = address(weth6); // weth6
+        }
+
+        vm.startPrank(user);
+
+        GammaSwapLibrary.safeApprove(_params.lpToken, address(lpZapper), withdrawAmt);
+
+        _params.balWETH = IERC20(_params.token0).balanceOf(user);
+        _params.balUSDC = IERC20(_params.token1).balanceOf(user);
+        _params.balWETH6 = IERC20(weth6).balanceOf(user);
+        _params.balUSDC6 = IERC20(usdc6).balanceOf(user);
+
+        vm.expectRevert("LP_ZAPPER: INVALID_PARAM_TO");
+        isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
+
+        params.to = user;
+
+        vm.expectRevert("LP_ZAPPER: INVALID_PARAM_CFMM");
+        isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
+
+        params.cfmm = address(cfmm);
+
+        if(swapPath > 0 && swapPath < 8) {
+            lpSwap0.amount = type(uint256).max;
+            lpSwap1.amount = type(uint256).max;
+
+            vm.expectRevert("DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT");
+            isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
+        }
+
+        lpSwap0.amount = 0;
+        lpSwap1.amount = 0;
+        isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
+
+        assertEq(gslpBalance - withdrawAmt, IERC20(_params.lpToken).balanceOf(user));
+
+        if(swapPath == 0) {
+            assertEq(_params.balWETH + 1e18 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user));
+            assertEq(_params.balUSDC + 1e18 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user));
+        } else if(swapPath == 1) { // usdc
+            assertEq(_params.balWETH, IERC20(_params.token0).balanceOf(user));
+            assertApproxEqRel(_params.balUSDC + 1e18 * 2 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user), 1e16);
+        } else if(swapPath == 2) { // weth
+            assertApproxEqRel(_params.balWETH + 1e18 * 2 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user), 1e16);
+            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
+        } else if(swapPath == 3) { // usdc6
+            assertEq(_params.balWETH, IERC20(_params.token0).balanceOf(user));
+            assertEq(_params.balUSDC + 1e18 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user));
+            assertApproxEqRel(_params.balUSDC6 + 1e6 * uint256(percent) / 100, IERC20(usdc6).balanceOf(user), 1e16);
+        } else if(swapPath == 4) { // weth6
+            assertEq(_params.balWETH, IERC20(_params.token0).balanceOf(user));
+            assertEq(_params.balUSDC + 1e18 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user));
+            assertApproxEqRel(_params.balWETH6 + 1e6 * uint256(percent) / 100, IERC20(weth6).balanceOf(user), 16e15);
+        } else if(swapPath == 5) { // weth6
+            assertEq(_params.balWETH + 1e18 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user));
+            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
+            assertApproxEqRel(_params.balWETH6 + 1e6 * uint256(percent) / 100, IERC20(weth6).balanceOf(user), 16e15);
+        } else if(swapPath == 6) { // usdc6
+            assertEq(_params.balWETH + 1e18 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user));
+            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
+            assertApproxEqRel(_params.balUSDC6 + 1e6 * uint256(percent) / 100, IERC20(usdc6).balanceOf(user), 16e15);
+        } else if(swapPath == 7) { // weth6
+            assertEq(_params.balUSDC, IERC20(_params.token0).balanceOf(user));
+            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
+            assertApproxEqRel(_params.balWETH6 + 1e6 * 2 * uint256(percent) / 100, IERC20(weth6).balanceOf(user), 3e16);
+        }
+        vm.stopPrank();/**/
+    }
+}
