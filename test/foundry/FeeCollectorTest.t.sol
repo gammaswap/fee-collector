@@ -27,7 +27,7 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
     ILPZapper lpZapper;
     address user;
     address executor;
-    address feeReceiver;/**/
+    address feeReceiver;
 
     function setUp() public {
         super.initCPMMGammaSwap(true);
@@ -37,7 +37,6 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
 
         GammaSwapLibrary.safeTransferETH(address(weth9), 1000_000*1e18);
 
-        //constructor(address _feeReceiver, address _executor, address _lpZapper, address _factory, address _WETH)
         lpZapper = new LPZapper(address(weth9), address(factory), address(cfmmFactory), address(posMgr), address(mathLib), address(uniRouter), address(0), address(uniRouter), address(0));
         feeCollector = new FeeCollector(feeReceiver, executor, address(lpZapper), address(factory), address(weth9));
         deal(address(weth9), user, 1000*1e18);
@@ -46,26 +45,43 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
 
         depositLiquidityInCFMM(addr2, 100e18, 100e18);
         depositLiquidityInPool(addr2);
+        depositLiquidityInCFMM(addr1, 100e18, 100e18);
 
         // 18x18 = usdc/weth9
         depositLiquidityInCFMMByToken(address(usdc), address(weth9), 100*1e18, 100*1e18, addr1);
         depositLiquidityInCFMMByToken(address(usdc), address(weth9), 100*1e18, 100*1e18, addr2);
         depositLiquidityInPoolFromCFMM(poolW9, cfmmW9, addr2);
+        depositLiquidityInCFMMByToken(address(usdc), address(weth9), 100*1e18, 100*1e18, addr1);
 
         // 18x6 = usdc/weth6
         depositLiquidityInCFMMByToken(address(usdc), address(weth6), 100*1e18, 100*1e6, addr1);
         depositLiquidityInCFMMByToken(address(usdc), address(weth6), 100*1e18, 100*1e6, addr2);
         depositLiquidityInPoolFromCFMM(pool18x6, cfmm18x6, addr2);
+        depositLiquidityInCFMMByToken(address(usdc), address(weth6), 100*1e18, 100*1e6, addr1);
 
         // 6x6 = weth6/usdc6
         depositLiquidityInCFMMByToken(address(usdc6), address(weth6), 100*1e6, 100*1e6, addr1);
         depositLiquidityInCFMMByToken(address(usdc6), address(weth6), 100*1e6, 100*1e6, addr2);
         depositLiquidityInPoolFromCFMM(pool6x6, cfmm6x6, addr2);
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth6), 100*1e6, 100*1e6, addr1);
 
         // 6x18 = usdc6/weth
         depositLiquidityInCFMMByToken(address(usdc6), address(weth), 100*1e6, 100*1e18, addr1);
         depositLiquidityInCFMMByToken(address(usdc6), address(weth), 100*1e6, 100*1e18, addr2);
-        depositLiquidityInPoolFromCFMM(pool6x18, cfmm6x18, addr2);/**/
+        depositLiquidityInPoolFromCFMM(pool6x18, cfmm6x18, addr2);
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth), 100*1e6, 100*1e18, addr1);
+
+        // 18x8 = usdc/weth8
+        depositLiquidityInCFMMByToken(address(usdc), address(weth8), 100*1e18, 100*1e8, addr1);
+        depositLiquidityInCFMMByToken(address(usdc), address(weth8), 100*1e18, 100*1e8, addr2);
+        depositLiquidityInPoolFromCFMM(pool18x8, cfmm18x8, addr2);
+        depositLiquidityInCFMMByToken(address(usdc), address(weth8), 100*1e18, 100*1e8, addr1);
+
+        // 6x8 = usdc6/weth8
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth8), 100*1e6, 100*1e8, addr1);
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth8), 100*1e6, 100*1e8, addr2);
+        depositLiquidityInPoolFromCFMM(pool6x8, cfmm6x8, addr2);
+        depositLiquidityInCFMMByToken(address(usdc6), address(weth8), 100*1e6, 100*1e8, addr1);
     }
 
     function testFeeCollectorOwner() public {
@@ -73,183 +89,190 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
         assertEq(FeeCollector(addr).owner(), address(this));
 
         vm.expectRevert("INITIALIZED");
-        FeeCollector(addr).initialize();/**/
+        FeeCollector(addr).initialize();
     }
 
-    function testCollectGSFees(uint8 swapPath, uint8 percent, bool isCFMMWithdrawal) public {
-        /*percent = percent < 10 ? 10 : percent;
-        percent = percent > 100 ? 100 : percent;
+    function testSetFeeReceiver() public {
+        assertEq(feeReceiver, feeCollector.feeReceiver());
 
-        uint256[] memory amountsMin = new uint256[](2);
-        IPositionManager.DepositReservesParams memory depositParams = IPositionManager.DepositReservesParams({
-            protocolId: 1,
-            cfmm: address(cfmm),
-            to: user,
-            deadline: block.timestamp,
-            amountsDesired: new uint256[](2),
-            amountsMin: amountsMin
-        });
-        depositParams.amountsDesired[0] = 1e18;
-        depositParams.amountsDesired[1] = 1e18;
+        address newFeeReceiver = vm.addr(0x123456789);
+        assertNotEq(feeReceiver, newFeeReceiver);
 
-        TestParams memory _params = TestParams({
-            lpToken: address(pool),
-            token0: ICPMM(cfmm).token0(),
-            token1: ICPMM(cfmm).token1(),
-            balWETH: 0,
-            balUSDC: 0,
-            balWETH6: 0,
-            balUSDC6: 0,
-            balETH: 0
-        });
+        vm.startPrank(addr1);
 
-        if(isCFMMWithdrawal) {
-            _params.lpToken = address(cfmm);
-            IERC20(_params.token0).approve(address(uniRouter), 1e18);
-            IERC20(_params.token1).approve(address(uniRouter), 1e18);
+        vm.expectRevert("Ownable: caller is not the owner");
+        feeCollector.setFeeReceiver(newFeeReceiver);
 
-            uniRouter.addLiquidity(_params.token0, _params.token1, 1e18, 1e18, 0, 0, user, type(uint256).max);
+        vm.stopPrank();
+
+        feeCollector.setFeeReceiver(newFeeReceiver);
+
+        assertEq(newFeeReceiver, feeCollector.feeReceiver());
+    }
+
+    function testSetExecutor() public {
+        assertEq(executor, feeCollector.executor());
+
+        address newExecutor = vm.addr(0x123456789);
+        assertNotEq(executor, newExecutor);
+
+        vm.startPrank(addr1);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        feeCollector.setExecutor(newExecutor);
+
+        vm.stopPrank();
+
+        feeCollector.setExecutor(newExecutor);
+
+        assertEq(newExecutor, feeCollector.executor());
+    }
+
+    function testCollectFees1(bool isCFMM) public {
+        vm.prank(addr1);
+        if(isCFMM) {
+            IERC20(address(cfmmW9)).transfer(address(feeCollector), 1e18);
         } else {
-            IERC20(_params.token0).approve(address(posMgr), 1e18);
-            IERC20(_params.token1).approve(address(posMgr), 1e18);
-
-            posMgr.depositReserves(depositParams);
+            IERC20(address(poolW9)).transfer(address(feeCollector), 1e18);
         }
 
-        uint256 gslpBalance = IERC20(_params.lpToken).balanceOf(user);
+        uint256 balance0 = IERC20(weth9).balanceOf(feeReceiver);
 
-        uint256 withdrawAmt = gslpBalance * percent / 100;
+        vm.prank(executor);
+        if(isCFMM) {
+            feeCollector.collectDSProtocolFees(cfmmW9, 1, 1e18, new uint256[](2), new uint256[](2),
+                new address[](0), new address[](0), new bytes(0), new bytes(0));
+        } else {
+            feeCollector.collectGSProtocolFees(cfmmW9, 1, 1e18, new uint256[](2), new uint256[](2),
+                new address[](0), new address[](0), new bytes(0), new bytes(0));
+        }
+        uint256 balance1 = IERC20(weth9).balanceOf(feeReceiver);
 
-        IPositionManager.WithdrawReservesParams memory params = IPositionManager.WithdrawReservesParams({
-            protocolId: 1,
-            cfmm: address(0),
-            amount: withdrawAmt,
-            to: address(0),
-            deadline: block.timestamp,
-            amountsMin: new uint256[](2)
-        });
+        assertApproxEqRel(balance1,balance0 + 2*1e18,1e16);
+    }
 
-        ILPZapper.LPSwapParams memory lpSwap0 = ILPZapper.LPSwapParams({
-            amount: 0,
-            protocolId: 0,
-            path: new address[](0),
-            uniV3Path: new bytes(0)
-        });
-
-        ILPZapper.LPSwapParams memory lpSwap1 = ILPZapper.LPSwapParams({
-            amount: 0,
-            protocolId: 0,
-            path: new address[](0),
-            uniV3Path: new bytes(0)
-        });
-
-        if(swapPath == 1) { // usdc
-            lpSwap0.protocolId = 1;
-            lpSwap0.path = new address[](2);
-            lpSwap0.path[0] = _params.token0;
-            lpSwap0.path[1] = _params.token1;
-        } else if(swapPath == 2) { // weth
-            lpSwap1.protocolId = 1;
-            lpSwap1.path = new address[](2);
-            lpSwap1.path[0] = _params.token1;
-            lpSwap1.path[1] = _params.token0;
-        } else if(swapPath == 3) { // usdc6
-            lpSwap0.protocolId = 1;
-            lpSwap0.path = new address[](2);
-            lpSwap0.path[0] = _params.token0; // weth
-            lpSwap0.path[1] = address(usdc6); // usdc6
-        } else if(swapPath == 4) { // weth6
-            lpSwap0.protocolId = 1;
-            lpSwap0.path = new address[](3);
-            lpSwap0.path[0] = _params.token0; // weth
-            lpSwap0.path[1] = address(usdc6); // usdc6
-            lpSwap0.path[2] = address(weth6); // weth6
-        } else if(swapPath == 5) { // weth6
-            lpSwap1.protocolId = 1;
-            lpSwap1.path = new address[](2);
-            lpSwap1.path[0] = _params.token1; // usdc
-            lpSwap1.path[1] = address(weth6); // weth6
-        } else if(swapPath == 6) { // usdc6
-            lpSwap1.protocolId = 1;
-            lpSwap1.path = new address[](3);
-            lpSwap1.path[0] = _params.token1; // usdc
-            lpSwap1.path[1] = _params.token0; // weth
-            lpSwap1.path[2] = address(usdc6); // usdc6
-        } else if(swapPath == 7) { // swap both to weth6
-            lpSwap0.protocolId = 1;
-            lpSwap0.path = new address[](3);
-            lpSwap0.path[0] = _params.token0; // weth
-            lpSwap0.path[1] = address(usdc6); // usdc6
-            lpSwap0.path[2] = address(weth6); // weth6
-            lpSwap1.protocolId = 1;
-            lpSwap1.path = new address[](2);
-            lpSwap1.path[0] = _params.token1; // usdc
-            lpSwap1.path[1] = address(weth6); // weth6
+    function testCollectFees2(uint8 typ, bool isCFMM) public {
+        uint256 amount = 1e18;
+        address _pool = address(pool);
+        address _cfmm = address(cfmm);
+        if(typ == 1){
+            _pool = address(pool18x6);
+            _cfmm = address(cfmm18x6);
+            amount = 1e12;
+        } else if(typ == 2) {
+            _pool = address(pool6x18);
+            _cfmm = address(cfmm6x18);
+            amount = 1e12;
+        } else if(typ == 3) {
+            _pool = address(pool6x6);
+            _cfmm = address(cfmm6x6);
+            amount = 1e6;
+        } else if(typ == 4) {
+            _pool = address(pool6x8);
+            _cfmm = address(cfmm6x8);
+            amount = 1e7;
+        } else if(typ == 5) {
+            _pool = address(pool18x8);
+            _cfmm = address(cfmm18x8);
+            amount = 1e13;
+        } else if(typ == 6) {
+            _pool = address(poolW9);
+            _cfmm = address(cfmmW9);
         }
 
-        vm.startPrank(user);
-
-        GammaSwapLibrary.safeApprove(_params.lpToken, address(lpZapper), withdrawAmt);
-
-        _params.balWETH = IERC20(_params.token0).balanceOf(user);
-        _params.balUSDC = IERC20(_params.token1).balanceOf(user);
-        _params.balWETH6 = IERC20(weth6).balanceOf(user);
-        _params.balUSDC6 = IERC20(usdc6).balanceOf(user);
-
-        vm.expectRevert("LP_ZAPPER: INVALID_PARAM_TO");
-        isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
-
-        params.to = user;
-
-        vm.expectRevert("LP_ZAPPER: INVALID_PARAM_CFMM");
-        isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
-
-        params.cfmm = address(cfmm);
-
-        if(swapPath > 0 && swapPath < 8) {
-            lpSwap0.amount = type(uint256).max;
-            lpSwap1.amount = type(uint256).max;
-
-            vm.expectRevert("DeltaSwapRouter: INSUFFICIENT_OUTPUT_AMOUNT");
-            isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
+        vm.prank(addr1);
+        if(isCFMM) {
+            IERC20(address(_cfmm)).transfer(address(feeCollector), amount);
+        } else {
+            IERC20(address(_pool)).transfer(address(feeCollector), amount);
         }
 
-        lpSwap0.amount = 0;
-        lpSwap1.amount = 0;
-        isCFMMWithdrawal ? lpZapper.dsZapOutToken(params, lpSwap0, lpSwap1) : lpZapper.zapOutToken(params, lpSwap0, lpSwap1);
-
-        assertEq(gslpBalance - withdrawAmt, IERC20(_params.lpToken).balanceOf(user));
-
-        if(swapPath == 0) {
-            assertEq(_params.balWETH + 1e18 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user));
-            assertEq(_params.balUSDC + 1e18 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user));
-        } else if(swapPath == 1) { // usdc
-            assertEq(_params.balWETH, IERC20(_params.token0).balanceOf(user));
-            assertApproxEqRel(_params.balUSDC + 1e18 * 2 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user), 1e16);
-        } else if(swapPath == 2) { // weth
-            assertApproxEqRel(_params.balWETH + 1e18 * 2 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user), 1e16);
-            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
-        } else if(swapPath == 3) { // usdc6
-            assertEq(_params.balWETH, IERC20(_params.token0).balanceOf(user));
-            assertEq(_params.balUSDC + 1e18 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user));
-            assertApproxEqRel(_params.balUSDC6 + 1e6 * uint256(percent) / 100, IERC20(usdc6).balanceOf(user), 1e16);
-        } else if(swapPath == 4) { // weth6
-            assertEq(_params.balWETH, IERC20(_params.token0).balanceOf(user));
-            assertEq(_params.balUSDC + 1e18 * uint256(percent) / 100, IERC20(_params.token1).balanceOf(user));
-            assertApproxEqRel(_params.balWETH6 + 1e6 * uint256(percent) / 100, IERC20(weth6).balanceOf(user), 16e15);
-        } else if(swapPath == 5) { // weth6
-            assertEq(_params.balWETH + 1e18 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user));
-            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
-            assertApproxEqRel(_params.balWETH6 + 1e6 * uint256(percent) / 100, IERC20(weth6).balanceOf(user), 16e15);
-        } else if(swapPath == 6) { // usdc6
-            assertEq(_params.balWETH + 1e18 * uint256(percent) / 100, IERC20(_params.token0).balanceOf(user));
-            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
-            assertApproxEqRel(_params.balUSDC6 + 1e6 * uint256(percent) / 100, IERC20(usdc6).balanceOf(user), 16e15);
-        } else if(swapPath == 7) { // weth6
-            assertEq(_params.balUSDC, IERC20(_params.token0).balanceOf(user));
-            assertEq(_params.balUSDC, IERC20(_params.token1).balanceOf(user));
-            assertApproxEqRel(_params.balWETH6 + 1e6 * 2 * uint256(percent) / 100, IERC20(weth6).balanceOf(user), 3e16);
+        address[] memory path0 = new address[](0);
+        address[] memory path1 = new address[](0);
+        address[] memory tokens = IGammaPool(address(_pool)).tokens();
+        if(address(weth) == tokens[0]) {
+            console.log("token0 is weth:",tokens[0]);
+            path0 = getPathForWETH();
+        } else if(address(weth) == tokens[1]) {
+            console.log("token1 is weth:",tokens[1]);
+            path1 = getPathForWETH();
         }
-        vm.stopPrank();/**/
+        if(address(usdc) == tokens[0]) {
+            console.log("token0 is usdc:",tokens[1]);
+            path0 = getPathForUSDC();
+        } else if(address(usdc) == tokens[1]) {
+            console.log("token1 is usdc:",tokens[1]);
+            path1 = getPathForUSDC();
+        }
+        if(address(weth6) == tokens[0]) {
+            console.log("token0 is weth6:",tokens[0]);
+            path0 = getPathForWETH6();
+        } else if(address(weth6) == tokens[1]) {
+            console.log("token1 is weth6:",tokens[1]);
+            path1 = getPathForWETH6();
+        }
+        if(address(usdc6) == tokens[0]) {
+            console.log("token0 is usdc6:",tokens[0]);
+            path0 = getPathForUSDC6();
+        } else if(address(usdc6) == tokens[1]) {
+            console.log("token1 is usdc6:",tokens[1]);
+            path1 = getPathForUSDC6();
+        }
+        if(address(weth8) == tokens[0]) {
+            console.log("token0 is weth8:",tokens[0]);
+            path0 = getPathForWETH8();
+        } else if(address(weth8) == tokens[1]) {
+            console.log("token1 is weth8:",tokens[1]);
+            path1 = getPathForWETH8();
+        }
+
+        uint256 balance0 = IERC20(weth9).balanceOf(feeReceiver);
+
+        vm.prank(executor);
+        if(isCFMM) {
+            feeCollector.collectDSProtocolFees(address(_cfmm), 1, amount, new uint256[](2), new uint256[](2),
+                path0, path1, new bytes(0), new bytes(0));
+        } else {
+            feeCollector.collectGSProtocolFees(address(_cfmm), 1, amount, new uint256[](2), new uint256[](2),
+                path0, path1, new bytes(0), new bytes(0));
+        }
+
+        uint256 balance1 = IERC20(weth9).balanceOf(feeReceiver);
+        assertApproxEqRel(balance1,balance0 + 2*1e18,1e16);
+    }
+
+    function getPathForWETH6() internal view returns(address[] memory path) {
+        path = new address[](3);
+        path[0] = address(weth6);
+        path[1] = address(usdc);
+        path[2] = address(weth9);
+    }
+
+    function getPathForWETH() internal view returns(address[] memory path) {
+        path = new address[](3);
+        path[0] = address(weth);
+        path[1] = address(usdc);
+        path[2] = address(weth9);
+    }
+
+    function getPathForUSDC() internal view returns(address[] memory path) {
+        path = new address[](2);
+        path[0] = address(usdc);
+        path[1] = address(weth9);
+    }
+
+    function getPathForUSDC6() internal view returns(address[] memory path) {
+        path = new address[](4);
+        path[0] = address(usdc6);
+        path[1] = address(weth);
+        path[2] = address(usdc);
+        path[3] = address(weth9);
+    }
+
+    function getPathForWETH8() internal view returns(address[] memory path) {
+        path = new address[](3);
+        path[0] = address(weth8);
+        path[1] = address(usdc);
+        path[2] = address(weth9);
     }
 }

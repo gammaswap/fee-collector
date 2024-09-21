@@ -120,8 +120,12 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         require(protocolId > 0, "INVALID_PROTOCOL_ID");
         require(lpAmount > 0, "ZERO_LP_AMOUNT");
 
-        address lpToken = isCFMMWithdrawal ? cfmm : getGammaPoolAddress(cfmm, protocolId);
+        address lpToken = getGammaPoolAddress(cfmm, protocolId);
+
         if(!GammaSwapLibrary.isContract(lpToken)) revert NotContract(); // Not a smart contract (hence not a CFMM) or not instantiated yet
+
+        address[] memory tokens = IGammaPool(lpToken).tokens();
+        lpToken = isCFMMWithdrawal ? cfmm : lpToken;
 
         {
             uint256 lpBalance = IERC20(lpToken).balanceOf(address(this));
@@ -152,8 +156,6 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
             path: new address[](0),
             uniV3Path: new bytes(0)
         });
-
-        address[] memory tokens = IGammaPool(lpToken).tokens();
 
         // isWETH Pool
         if(tokens[0] == WETH) {
