@@ -219,5 +219,8 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         super.clearToken(token, to, minAmt);
     }
 
+    function sendTokensCallback(address[] calldata tokens, uint256[] calldata amounts, address payee, bytes calldata data) external virtual override {
+    }
+
     function _authorizeUpgrade(address) internal override onlyOwner {}
 }

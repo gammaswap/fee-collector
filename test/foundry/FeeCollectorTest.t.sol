@@ -128,6 +128,39 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
         assertEq(newExecutor, feeCollector.executor());
     }
 
+    function testClearToken() public {
+        address payable _feeCollector = payable(address(feeCollector));
+
+        vm.startPrank(addr1);
+
+        uint256 bal0 = IERC20(weth9).balanceOf(address(feeCollector));
+
+        IERC20(weth9).transfer(address(feeCollector), 1e18);
+
+        assertEq(bal0 + 1e18, IERC20(weth9).balanceOf(address(feeCollector)));
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        FeeCollector(_feeCollector).clearToken(address(weth9), addr1, 1e18);
+
+        vm.stopPrank();
+
+        vm.expectRevert(bytes4(keccak256("NotEnoughTokens()")));
+        FeeCollector(_feeCollector).clearToken(address(weth9), addr1, 1e18 + 1);
+
+        assertEq(0, IERC20(weth).balanceOf(address(feeCollector)));
+
+        vm.expectRevert(bytes4(keccak256("NotEnoughTokens()")));
+        FeeCollector(_feeCollector).clearToken(address(weth), addr1, 1e18);
+
+        bal0 = IERC20(weth9).balanceOf(address(feeCollector));
+        uint256 addr1Bal = IERC20(weth9).balanceOf(addr1);
+
+        FeeCollector(_feeCollector).clearToken(address(weth9), addr1, 1e18);
+
+        assertEq(bal0 - 1e18, IERC20(weth9).balanceOf(address(feeCollector)));
+        assertEq(addr1Bal + 1e18, IERC20(weth9).balanceOf(addr1));
+    }
+
     function testCollectFees1(bool isCFMM) public {
         vm.prank(addr1);
         if(isCFMM) {
