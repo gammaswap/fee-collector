@@ -8,12 +8,26 @@ interface IFeeCollector {
     /// @return Address that receives collected protocol fees
     function feeReceiver() external view returns(address);
 
+    /// @return Address that distributes collected protocol fees
+    function feeDistributor() external view returns(address);
+
+    /// @return Share given to feeDistributor
+    function feeDistributorShare() external view returns(uint256);
+
     /// @return Address that is allowed to call functions to collect protocol fees
     function executor() external view returns(address);
 
     /// @dev Update feeReceiver address
     /// @param _feeReceiver - new address that will collect protocol fees
     function setFeeReceiver(address _feeReceiver) external;
+
+    /// @dev Set feeDistributor address
+    /// @param _feeDistributor - address of feeDistributor that distributes protocol revenue
+    function setFeeDistributor(address _feeDistributor) external;
+
+    /// @dev Set feeDistributor share
+    /// @param _feeDistributorShare - share given to feeDistributor to distribute as protocol revenue
+    function setFeeDistributorShare(uint256 _feeDistributorShare) external;
 
     /// @dev Update executor address
     /// @param _executor - new address that will be allowed to call functions to collect protocol fees
