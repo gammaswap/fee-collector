@@ -38,6 +38,12 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
     /// @inheritdoc IFeeCollector
     address public override executor;
 
+    /// @inheritdoc IFeeCollector
+    address public override feeDistributor;
+
+    /// @inheritdoc IFeeCollector
+    uint256 public override feeDistributorShare;
+
     constructor(address _feeReceiver, address _executor, address _lpZapper, address _factory, address _WETH) Transfers(WETH) {
         feeReceiver = _feeReceiver;
         executor = _executor;
@@ -67,6 +73,18 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
     function setFeeReceiver(address _feeReceiver) external virtual override onlyOwner {
         require(_feeReceiver != address(0), "ZERO_ADDRESS");
         feeReceiver = _feeReceiver;
+    }
+
+    /// @inheritdoc IFeeCollector
+    function setFeeDistributor(address _feeDistributor) external virtual override onlyOwner {
+        require(_feeDistributor != address(0), "ZERO_ADDRESS");
+        feeDistributor = _feeDistributor;
+    }
+
+    /// @inheritdoc IFeeCollector
+    function setFeeDistributorShare(uint256 _feeDistributorShare) external virtual override onlyOwner {
+        require(_feeDistributorShare <= 1e18, "SHARE_GT_100_PCT");
+        feeDistributorShare = _feeDistributorShare;
     }
 
     /// @inheritdoc IFeeCollector
@@ -119,6 +137,8 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         require(cfmm != address(0), "ZERO_ADDRESS");
         require(protocolId > 0, "INVALID_PROTOCOL_ID");
         require(lpAmount > 0, "ZERO_LP_AMOUNT");
+        require(feeReceiver != address(0), "ZERO_FEE_RECEIVER");
+        require(feeDistributorShare == 0 || feeDistributor != address(0), "ZERO_FEE_DISTRIBUTOR");
 
         address lpToken = getGammaPoolAddress(cfmm, protocolId);
 
@@ -138,7 +158,7 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
             protocolId: protocolId,
             cfmm: cfmm,
             amount: lpAmount,
-            to: feeReceiver,
+            to: feeDistributorShare == 0 ? feeReceiver : address(this),
             deadline: block.timestamp,
             amountsMin: amountsMin
         });
@@ -211,6 +231,13 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
             ILPZapper(lpZapper).dsZapOutToken(params, lpSwap0, lpSwap1);
         } else {
             ILPZapper(lpZapper).zapOutToken(params, lpSwap0, lpSwap1);
+        }
+
+        if(feeDistributorShare > 0) {
+            uint256 wethBalance = IERC20(WETH).balanceOf(address(this));
+            uint256 feeDistributorWETH = wethBalance * feeDistributorShare / 1e18;
+            GammaSwapLibrary.safeTransfer(WETH, feeDistributor, feeDistributorWETH);
+            GammaSwapLibrary.safeTransfer(WETH, feeReceiver, wethBalance - feeDistributorWETH);
         }
     }
 

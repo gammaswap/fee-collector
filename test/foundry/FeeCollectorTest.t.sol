@@ -105,9 +105,60 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
 
         vm.stopPrank();
 
+        vm.expectRevert("ZERO_ADDRESS");
+        feeCollector.setFeeReceiver(address(0));
+
         feeCollector.setFeeReceiver(newFeeReceiver);
 
         assertEq(newFeeReceiver, feeCollector.feeReceiver());
+    }
+
+    function testSetFeeDistributor() public {
+        assertEq(address(0), feeCollector.feeDistributor());
+
+        address newFeeDistributor = vm.addr(0x1234567899);
+
+        vm.startPrank(addr1);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        feeCollector.setFeeDistributor(newFeeDistributor);
+
+        vm.stopPrank();
+
+        vm.expectRevert("ZERO_ADDRESS");
+        feeCollector.setFeeDistributor(address(0));
+
+        feeCollector.setFeeDistributor(newFeeDistributor);
+
+        assertEq(newFeeDistributor, feeCollector.feeDistributor());
+    }
+
+    function testSetFeeDistributorShare() public {
+        assertEq(0, feeCollector.feeDistributorShare());
+
+        uint256 newFeeDistributorShare = 1e18;
+
+        vm.startPrank(addr1);
+
+        vm.expectRevert("Ownable: caller is not the owner");
+        feeCollector.setFeeDistributorShare(newFeeDistributorShare);
+
+        vm.stopPrank();
+
+        vm.expectRevert("SHARE_GT_100_PCT");
+        feeCollector.setFeeDistributorShare(newFeeDistributorShare + 1);
+
+        feeCollector.setFeeDistributorShare(newFeeDistributorShare);
+
+        assertEq(newFeeDistributorShare, feeCollector.feeDistributorShare());
+
+        feeCollector.setFeeDistributorShare(newFeeDistributorShare/2);
+
+        assertEq(newFeeDistributorShare/2, feeCollector.feeDistributorShare());
+
+        feeCollector.setFeeDistributorShare(0);
+
+        assertEq(0, feeCollector.feeDistributorShare());
     }
 
     function testSetExecutor() public {
@@ -161,7 +212,7 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
         assertEq(addr1Bal + 1e18, IERC20(weth9).balanceOf(addr1));
     }
 
-    function testCollectFees1(bool isCFMM) public {
+    function testCollectFees1(bool isCFMM, bool hasFeeDistributor) public {
         vm.prank(addr1);
         if(isCFMM) {
             IERC20(address(cfmmW9)).transfer(address(feeCollector), 1e18);
@@ -169,7 +220,26 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
             IERC20(address(poolW9)).transfer(address(feeCollector), 1e18);
         }
 
+        address feeDistributor = vm.addr(0x1234566);
+        uint256 feeDistributorShare = 1e18/uint256(3);
+        if(hasFeeDistributor) {
+            vm.prank(owner);
+            feeCollector.setFeeDistributorShare(feeDistributorShare);
+
+            vm.prank(executor);
+            vm.expectRevert("ZERO_FEE_DISTRIBUTOR");
+            if(isCFMM) {
+                feeCollector.collectDSProtocolFees(cfmmW9, 1, 1e18, new uint256[](2), new uint256[](2),
+                    new address[](0), new address[](0), new bytes(0), new bytes(0));
+            } else {
+                feeCollector.collectGSProtocolFees(cfmmW9, 1, 1e18, new uint256[](2), new uint256[](2),
+                    new address[](0), new address[](0), new bytes(0), new bytes(0));
+            }
+            feeCollector.setFeeDistributor(feeDistributor);
+        }
+
         uint256 balance0 = IERC20(weth9).balanceOf(feeReceiver);
+        uint256 _balance0 = IERC20(weth9).balanceOf(feeDistributor);
 
         vm.prank(executor);
         if(isCFMM) {
@@ -179,9 +249,16 @@ contract FeeCollectorTest is CPMMGammaSwapSetup {
             feeCollector.collectGSProtocolFees(cfmmW9, 1, 1e18, new uint256[](2), new uint256[](2),
                 new address[](0), new address[](0), new bytes(0), new bytes(0));
         }
-        uint256 balance1 = IERC20(weth9).balanceOf(feeReceiver);
 
-        assertApproxEqRel(balance1,balance0 + 2*1e18,1e16);
+        uint256 balance1 = IERC20(weth9).balanceOf(feeReceiver);
+        uint256 _balance1 = IERC20(weth9).balanceOf(feeDistributor);
+
+        if(hasFeeDistributor) {
+            assertApproxEqRel(_balance1,_balance0 + 2*1e18/uint256(3),1e16);
+            assertApproxEqRel(balance1,balance0 + 2*2*1e18/uint256(3),1e16);
+        } else {
+            assertApproxEqRel(balance1,balance0 + 2*1e18,1e16);
+        }
     }
 
     function testCollectFees2(uint8 typ, bool isCFMM) public {
