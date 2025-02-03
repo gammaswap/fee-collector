@@ -429,7 +429,7 @@
   resolved "https://npm.pkg.github.com/download/@gammaswap/univ3-rebalancer/1.2.1/f74826b5ac8fc60e56093b9776c90a9d6b0033c7#f74826b5ac8fc60e56093b9776c90a9d6b0033c7"
   integrity sha512-YIpHxTfCmF3pViL9cIXVpf64YVQgJ7xqHbO2uc99QZamZxnM6Sz/JSqAKH3bmtNkomKeO1KsiREoPj0IpWd4bQ==
 
-"@gammaswap/universal-router@^1.7.0":
+"@gammaswap/universal-router@^1.6.0", "@gammaswap/universal-router@^1.7.0":
   version "1.7.0"
   resolved "https://npm.pkg.github.com/download/@gammaswap/universal-router/1.7.0/63a8311f5eb9e3e225630f232c818b198c13a467#63a8311f5eb9e3e225630f232c818b198c13a467"
   integrity sha512-jKa8TUYyRCaOAd4usnSDczRrZKwMdstb1SLoQaRqCGM/Sk0TtNUp3nrLe6SB3DEUvcy8WQ2XmjVwc/lxlIhKBA==
@@ -496,12 +496,13 @@
     "@uniswap/v2-core" "^1.0.1"
     "@uniswap/v2-periphery" "^1.1.0-beta.0"
 
-"@gammaswap/v1-zapper@^1.3.0":
-  version "1.3.0"
-  resolved "https://npm.pkg.github.com/download/@gammaswap/v1-zapper/1.3.0/5bad122d821b6470280b457226891581a541613e#5bad122d821b6470280b457226891581a541613e"
-  integrity sha512-Xy4X2hC9o8DYvjEGz6MWTo9i6qyfxvt5JgU2C+ricgWQflXBF2vAMUYttT+a38QI1eDEKcSVVqwxZu1ftuApww==
+"@gammaswap/v1-zapper@^1.4.1":
+  version "1.4.1"
+  resolved "https://npm.pkg.github.com/download/@gammaswap/v1-zapper/1.4.1/bc45d130c10ebf58848e4c5f6897969685f5bed6#bc45d130c10ebf58848e4c5f6897969685f5bed6"
+  integrity sha512-vLe7Gf7wUInX8FXtGBpFutehXa3yHEiWI6q31gOatzUoZHkaQRrj9QryOcoj/Vce45saqPWqEmXvVQoIRe5/7g==
   dependencies:
     "@gammaswap/univ3-rebalancer" "^1.2.1"
+    "@gammaswap/universal-router" "^1.6.0"
     "@gammaswap/v1-core" "^1.2.11"
     "@gammaswap/v1-deltaswap" "^0.8.1"
     "@gammaswap/v1-implementations" "^1.2.11"
