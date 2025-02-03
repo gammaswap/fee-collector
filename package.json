@@ -1,6 +1,6 @@
 {
   "name": "@gammaswap/fee-collector",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Fee collector contract for GammaSwap V1 protocol",
   "homepage": "https://gammaswap.com",
   "scripts": {
@@ -59,7 +59,7 @@
     "@gammaswap/v1-implementations": "^1.2.11",
     "@gammaswap/v1-liquidator": "^1.3.0",
     "@gammaswap/v1-periphery": "^1.2.14",
-    "@gammaswap/v1-zapper": "^1.3.0",
+    "@gammaswap/v1-zapper": "^1.4.1",
     "@openzeppelin/contracts": "^4.8.0",
     "@uniswap/v3-core": "^1.0.1"
   }

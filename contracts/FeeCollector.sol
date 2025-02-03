@@ -98,15 +98,15 @@ contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers
         return AddressCalculator.calcAddress(factory, protocolId, AddressCalculator.getGammaPoolKey(cfmm, protocolId));
     }
 
-    /// @dev Get last token from UniswapV3 path
-    /// @param path - UniswapV3 swap path
+    /// @dev Get last token from UniversalRouter path
+    /// @param path - UniversalRouter swap path
     /// @return tokenOut - last token in path
     function _getTokenOut(bytes memory path) internal view returns(address tokenOut) {
-        bytes memory _path = path.skipToken();
+        bytes memory _path = path;
         while (_path.hasMultiplePools()) {
             _path = _path.skipToken();
         }
-        tokenOut = _path.toAddress(0);
+        tokenOut = _path.skipToken().toAddress(0);
     }
 
     /// @dev check path with UniV3 ends in WETH
