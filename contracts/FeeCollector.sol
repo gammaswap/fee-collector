@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-import "@gammaswap/univ3-rebalancer/contracts/libraries/Path.sol";
-import "@gammaswap/univ3-rebalancer/contracts/libraries/BytesLib.sol";
+import "@gammaswap/universal-router/contracts/libraries/Path2.sol";
+import "@gammaswap/universal-router/contracts/libraries/BytesLib2.sol";
 import "@gammaswap/v1-core/contracts/interfaces/IGammaPool.sol";
 import "@gammaswap/v1-core/contracts/libraries/AddressCalculator.sol";
 import "@gammaswap/v1-core/contracts/libraries/GammaSwapLibrary.sol";
@@ -21,8 +21,8 @@ import "./interfaces/IFeeCollector.sol";
 /// @dev Converts GammaSwap Protocol Fees into protocol revenue
 contract FeeCollector is Initializable, UUPSUpgradeable, Ownable2Step, Transfers, IFeeCollector {
 
-    using Path for bytes;
-    using BytesLib for bytes;
+    using Path2 for bytes;
+    using BytesLib2 for bytes;
 
     error NotContract();
 

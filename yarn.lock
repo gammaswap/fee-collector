@@ -429,6 +429,16 @@
   resolved "https://npm.pkg.github.com/download/@gammaswap/univ3-rebalancer/1.2.1/f74826b5ac8fc60e56093b9776c90a9d6b0033c7#f74826b5ac8fc60e56093b9776c90a9d6b0033c7"
   integrity sha512-YIpHxTfCmF3pViL9cIXVpf64YVQgJ7xqHbO2uc99QZamZxnM6Sz/JSqAKH3bmtNkomKeO1KsiREoPj0IpWd4bQ==
 
+"@gammaswap/universal-router@^1.7.0":
+  version "1.7.0"
+  resolved "https://npm.pkg.github.com/download/@gammaswap/universal-router/1.7.0/63a8311f5eb9e3e225630f232c818b198c13a467#63a8311f5eb9e3e225630f232c818b198c13a467"
+  integrity sha512-jKa8TUYyRCaOAd4usnSDczRrZKwMdstb1SLoQaRqCGM/Sk0TtNUp3nrLe6SB3DEUvcy8WQ2XmjVwc/lxlIhKBA==
+  dependencies:
+    "@gammaswap/univ3-rebalancer" "^1.2.1"
+    "@gammaswap/v1-core" "^1.2.11"
+    "@gammaswap/v1-implementations" "^1.2.11"
+    "@gammaswap/v1-periphery" "^1.2.14"
+
 "@gammaswap/v1-core@^1.1.20", "@gammaswap/v1-core@^1.2.11", "@gammaswap/v1-core@^1.2.2", "@gammaswap/v1-core@^1.2.9":
   version "1.2.11"
   resolved "https://npm.pkg.github.com/download/@gammaswap/v1-core/1.2.11/354d4cd420d1bab50ae41711da757a7de563911e#354d4cd420d1bab50ae41711da757a7de563911e"
